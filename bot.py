@@ -33,16 +33,6 @@ CREATE TABLE IF NOT EXISTS users (
 )
 """)
 
-# VERIFICATION TABLE
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS verifications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_id INTEGER,
-    proof TEXT,
-    approved INTEGER DEFAULT 0
-)
-""")
-
 conn.commit()
 
 # SOCIAL LINK
@@ -87,8 +77,6 @@ async def start(message: types.Message):
 
         conn.commit()
 
-    referral_link = f"https://t.me/{(await bot.get_me()).username}?start={user_id}"
-
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -107,8 +95,7 @@ async def start(message: types.Message):
         "/daily\n"
         "/balance\n"
         "/leaderboard\n"
-        "/referral\n"
-        "/verify\n\n"
+        "/referral\n\n"
         "Invite friends and earn rewards!",
         reply_markup=keyboard
     )
@@ -217,61 +204,6 @@ async def referral(message: types.Message):
         f"👥 Your Referral Link:\n\n"
         f"{referral_link}\n\n"
         f"🎁 Earn 500 MITH Points per referral!"
-    )
-
-
-# VERIFY COMMAND
-@dp.message(Command("verify"))
-async def verify(message: types.Message):
-
-    user_id = message.from_user.id
-
-    args = message.text.split()
-
-    if len(args) < 2:
-
-        await message.answer(
-            "❌ Usage:\n\n"
-            "/verify screenshot_link"
-        )
-
-        return
-
-    proof = args[1]
-
-    # CHECK EXISTING
-    cursor.execute(
-        "SELECT * FROM verifications WHERE telegram_id=?",
-        (user_id,)
-    )
-
-    existing = cursor.fetchone()
-
-    if existing:
-
-        await message.answer(
-            "✅ Verification already submitted"
-        )
-
-        return
-
-    # SAVE VERIFICATION
-    cursor.execute(
-        "INSERT INTO verifications (telegram_id, proof, approved) VALUES (?, ?, ?)",
-        (user_id, proof, 0)
-    )
-
-    # REWARD USER
-    cursor.execute(
-        "UPDATE users SET points = points + 1000 WHERE telegram_id=?",
-        (user_id,)
-    )
-
-    conn.commit()
-
-    await message.answer(
-        "🎉 Verification submitted successfully!\n\n"
-        "⭐ You earned 1000 MITH Points"
     )
 
 
