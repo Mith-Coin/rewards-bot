@@ -79,38 +79,28 @@ async def start(message: types.Message):
 
         conn.commit()
 
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📸 Follow Instagram",
-                    url=INSTAGRAM_URL
-                )
-            ]
+keyboard = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="📸 Follow Instagram",
+                url=INSTAGRAM_URL
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="💬 Join Telegram Group",
+                url=f"https://{TELEGRAM_GROUP_URL}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🚀 Join Telegram Community",
+                url=f"https://{TELEGRAM_COMMUNITY_URL}"
+            )
         ]
-    )
-
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📸 Join Telegram Group",
-                    url=TELEGRAM_GROUP_URL
-                )
-            ]
-        ]
-    )
-
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📸 Join Telegram Community for regular updates",
-                    url=TELEGRAM_COMMUNITY_URL
-                )
-            ]
-        ]
-    )
+    ]
+)
     await message.answer(
         "🎁 Welcome to MITH Rewards\n\n"
         "You received 100 MITH Points!\n\n"
