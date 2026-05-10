@@ -37,6 +37,8 @@ conn.commit()
 
 # SOCIAL LINK
 INSTAGRAM_URL = "https://www.instagram.com/mith_coin?igsh=dmJnOXpibDVzeTF4"
+TELEGRAM_GROUP_URL = "t.me/mith_coin_official"
+TELEGRAM_COMMUNITY_URL = "t.me/mith_india"
 
 
 # START COMMAND
@@ -88,6 +90,27 @@ async def start(message: types.Message):
         ]
     )
 
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📸 Join Telegram Group",
+                    url=TELEGRAM_GROUP_URL
+                )
+            ]
+        ]
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📸 Join Telegram Community for regular updates",
+                    url=TELEGRAM_COMMUNITY_URL
+                )
+            ]
+        ]
+    )
     await message.answer(
         "🎁 Welcome to MITH Rewards\n\n"
         "You received 100 MITH Points!\n\n"
