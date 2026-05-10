@@ -33,23 +33,20 @@ CREATE TABLE IF NOT EXISTS users (
 )
 """)
 
-# TASKS TABLE
+# VERIFICATION TABLE
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS tasks (
+CREATE TABLE IF NOT EXISTS verifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     telegram_id INTEGER,
-    task_name TEXT,
-    completed INTEGER DEFAULT 0,
-    proof TEXT
+    proof TEXT,
+    approved INTEGER DEFAULT 0
 )
 """)
 
 conn.commit()
 
-# SOCIAL LINKS
+# SOCIAL LINK
 INSTAGRAM_URL = "https://www.instagram.com/mith_coin?igsh=dmJnOXpibDVzeTF4"
-TWITTER_URL = "https://x.com/YOURPAGE"
-LINKEDIN_URL = "https://linkedin.com/company/YOURPAGE"
 
 
 # START COMMAND
@@ -58,6 +55,13 @@ async def start(message: types.Message):
 
     user_id = message.from_user.id
     username = message.from_user.username or "User"
+
+    args = message.text.split()
+
+    referral_id = None
+
+    if len(args) > 1:
+        referral_id = args[1]
 
     cursor.execute(
         "SELECT * FROM users WHERE telegram_id=?",
@@ -73,7 +77,28 @@ async def start(message: types.Message):
             (user_id, username, 100)
         )
 
+        # REFERRAL REWARD
+        if referral_id and str(referral_id) != str(user_id):
+
+            cursor.execute(
+                "UPDATE users SET points = points + 500, referrals = referrals + 1 WHERE telegram_id=?",
+                (referral_id,)
+            )
+
         conn.commit()
+
+    referral_link = f"https://t.me/{(await bot.get_me()).username}?start={user_id}"
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📸 Follow Instagram",
+                    url=INSTAGRAM_URL
+                )
+            ]
+        ]
+    )
 
     await message.answer(
         "🎁 Welcome to MITH Rewards\n\n"
@@ -82,7 +107,10 @@ async def start(message: types.Message):
         "/daily\n"
         "/balance\n"
         "/leaderboard\n"
-        "/tasks"
+        "/referral\n"
+        "/verify\n\n"
+        "Invite friends and earn rewards!",
+        reply_markup=keyboard
     )
 
 
@@ -132,7 +160,7 @@ async def balance(message: types.Message):
     user_id = message.from_user.id
 
     cursor.execute(
-        "SELECT points FROM users WHERE telegram_id=?",
+        "SELECT points, referrals FROM users WHERE telegram_id=?",
         (user_id,)
     )
 
@@ -140,8 +168,11 @@ async def balance(message: types.Message):
 
     if result:
 
+        points, referrals = result
+
         await message.answer(
-            f"💰 Your Balance: {result[0]} MITH Points"
+            f"💰 Balance: {points} MITH Points\n"
+            f"👥 Referrals: {referrals}"
         )
 
     else:
@@ -172,47 +203,20 @@ async def leaderboard(message: types.Message):
     await message.answer(text)
 
 
-# TASKS COMMAND
-@dp.message(Command("tasks"))
-async def tasks(message: types.Message):
+# REFERRAL COMMAND
+@dp.message(Command("referral"))
+async def referral(message: types.Message):
 
-    text = (
-        "📋 MITH Social Tasks\n\n"
-        "📸 Follow Instagram — 1000 Points\n"
-        "🐦 Follow Twitter/X — 1000 Points\n"
-        "💼 Follow LinkedIn — 1000 Points\n\n"
-        "After completing tasks use:\n\n"
-        "/verify instagram yourusername\n"
-        "/verify twitter yourusername\n"
-        "/verify linkedin yourusername"
-    )
+    user_id = message.from_user.id
 
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📸 Instagram",
-                    url=INSTAGRAM_URL
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🐦 Twitter/X",
-                    url=TWITTER_URL
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="💼 LinkedIn",
-                    url=LINKEDIN_URL
-                )
-            ]
-        ]
-    )
+    bot_info = await bot.get_me()
+
+    referral_link = f"https://t.me/{bot_info.username}?start={user_id}"
 
     await message.answer(
-        text,
-        reply_markup=keyboard
+        f"👥 Your Referral Link:\n\n"
+        f"{referral_link}\n\n"
+        f"🎁 Earn 500 MITH Points per referral!"
     )
 
 
@@ -224,38 +228,21 @@ async def verify(message: types.Message):
 
     args = message.text.split()
 
-    if len(args) < 3:
+    if len(args) < 2:
 
         await message.answer(
             "❌ Usage:\n\n"
-            "/verify instagram username\n"
-            "/verify twitter username\n"
-            "/verify linkedin username"
+            "/verify screenshot_link"
         )
 
         return
 
-    task = args[1].lower()
-    proof = args[2]
+    proof = args[1]
 
-    rewards = {
-        "instagram": 1000,
-        "twitter": 1000,
-        "linkedin": 1000
-    }
-
-    if task not in rewards:
-
-        await message.answer(
-            "❌ Invalid task"
-        )
-
-        return
-
-    # CHECK DUPLICATE
+    # CHECK EXISTING
     cursor.execute(
-        "SELECT * FROM tasks WHERE telegram_id=? AND task_name=?",
-        (user_id, task)
+        "SELECT * FROM verifications WHERE telegram_id=?",
+        (user_id,)
     )
 
     existing = cursor.fetchone()
@@ -263,31 +250,28 @@ async def verify(message: types.Message):
     if existing:
 
         await message.answer(
-            "✅ Task already completed"
+            "✅ Verification already submitted"
         )
 
         return
 
-    reward = rewards[task]
-
-    # SAVE TASK
+    # SAVE VERIFICATION
     cursor.execute(
-        "INSERT INTO tasks (telegram_id, task_name, completed, proof) VALUES (?, ?, ?, ?)",
-        (user_id, task, 1, proof)
+        "INSERT INTO verifications (telegram_id, proof, approved) VALUES (?, ?, ?)",
+        (user_id, proof, 0)
     )
 
-    # ADD REWARD
+    # REWARD USER
     cursor.execute(
-        "UPDATE users SET points = points + ? WHERE telegram_id=?",
-        (reward, user_id)
+        "UPDATE users SET points = points + 1000 WHERE telegram_id=?",
+        (user_id,)
     )
 
     conn.commit()
 
     await message.answer(
-        f"🎉 Verification Successful!\n\n"
-        f"📌 Task: {task.capitalize()}\n"
-        f"⭐ Reward: {reward} MITH Points"
+        "🎉 Verification submitted successfully!\n\n"
+        "⭐ You earned 1000 MITH Points"
     )
 
 
