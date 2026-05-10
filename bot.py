@@ -35,10 +35,10 @@ CREATE TABLE IF NOT EXISTS users (
 
 conn.commit()
 
-# SOCIAL LINK
+# SOCIAL LINKS
 INSTAGRAM_URL = "https://www.instagram.com/mith_coin?igsh=dmJnOXpibDVzeTF4"
-TELEGRAM_GROUP_URL = "t.me/mith_coin_official"
-TELEGRAM_COMMUNITY_URL = "t.me/mith_india"
+TELEGRAM_GROUP_URL = "https://t.me/mith_coin_official"
+TELEGRAM_COMMUNITY_URL = "https://t.me/mith_india"
 
 
 # START COMMAND
@@ -79,28 +79,30 @@ async def start(message: types.Message):
 
         conn.commit()
 
-keyboard = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="📸 Follow Instagram",
-                url=INSTAGRAM_URL
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="💬 Join Telegram Group",
-                url=f"https://{TELEGRAM_GROUP_URL}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="🚀 Join Telegram Community",
-                url=f"https://{TELEGRAM_COMMUNITY_URL}"
-            )
+    # KEYBOARD
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📸 Follow Instagram",
+                    url=INSTAGRAM_URL
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="💬 Join Telegram Group",
+                    url=TELEGRAM_GROUP_URL
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🚀 Join Telegram Community",
+                    url=TELEGRAM_COMMUNITY_URL
+                )
+            ]
         ]
-    ]
-)
+    )
+
     await message.answer(
         "🎁 Welcome to MITH Rewards\n\n"
         "You received 100 MITH Points!\n\n"
