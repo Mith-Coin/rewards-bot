@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 conn.commit()
 
 # SOCIAL LINKS
-INSTAGRAM_URL = "https://instagram.com/YOURPAGE"
+INSTAGRAM_URL = "https://www.instagram.com/mith_coin?igsh=dmJnOXpibDVzeTF4"
 TWITTER_URL = "https://x.com/YOURPAGE"
 LINKEDIN_URL = "https://linkedin.com/company/YOURPAGE"
 
