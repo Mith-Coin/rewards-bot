@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS users (
     telegram_id INTEGER PRIMARY KEY,
     username TEXT,
     points INTEGER DEFAULT 0,
+    coins REAL DEFAULT 0,
     referrals INTEGER DEFAULT 0,
+    wallet TEXT,
     last_daily TEXT
 )
 """)
@@ -108,11 +110,59 @@ async def start(message: types.Message):
         "You received 100 MITH Points!\n\n"
         "Commands:\n"
         "/daily\n"
+        "/convert\n"
         "/balance\n"
         "/leaderboard\n"
         "/referral\n\n"
         "Invite friends and earn rewards!",
         reply_markup=keyboard
+    )
+
+
+# CONVERT POINTS TO COINS
+@dp.message(Command("convert"))
+async def convert(message: types.Message):
+
+    user_id = message.from_user.id
+
+    cursor.execute(
+        "SELECT points, coins FROM users WHERE telegram_id=?",
+        (user_id,)
+    )
+
+    result = cursor.fetchone()
+
+    if not result:
+        await message.answer("❌ Use /start first")
+        return
+
+    points, coins = result
+
+    if points < 100:
+        await message.answer(
+            "❌ Minimum 100 points required."
+        )
+        return
+
+    mith_coins = points // 100
+
+    remaining_points = points % 100
+
+    updated_coins = coins + mith_coins
+
+    cursor.execute(
+        "UPDATE users SET points=?, coins=? WHERE telegram_id=?",
+        (
+            remaining_points,
+            updated_coins,
+            user_id
+        )
+    )
+
+    conn.commit()
+
+    await message.answer(
+        f"🎉 Converted {mith_coins * 100} points into {mith_coins} MITH Coins!"
     )
 
 
@@ -162,7 +212,7 @@ async def balance(message: types.Message):
     user_id = message.from_user.id
 
     cursor.execute(
-        "SELECT points, referrals FROM users WHERE telegram_id=?",
+        "SELECT points, coins, referrals FROM users WHERE telegram_id=?",
         (user_id,)
     )
 
@@ -170,10 +220,11 @@ async def balance(message: types.Message):
 
     if result:
 
-        points, referrals = result
+        points, coins, referrals = result
 
         await message.answer(
-            f"💰 Balance: {points} MITH Points\n"
+            f"💰 Points: {points}\n"
+            f"🪙 MITH Coins: {coins}\n"
             f"👥 Referrals: {referrals}"
         )
 
@@ -189,18 +240,18 @@ async def balance(message: types.Message):
 async def leaderboard(message: types.Message):
 
     cursor.execute(
-        "SELECT username, points FROM users ORDER BY points DESC LIMIT 10"
+        "SELECT username, coins FROM users ORDER BY coins DESC LIMIT 10"
     )
 
     users = cursor.fetchall()
 
-    text = "🏆 MITH Leaderboard\n\n"
+    text = "🏆 MITH Coin Leaderboard\n\n"
 
     for index, user in enumerate(users, start=1):
 
-        username, points = user
+        username, coins = user
 
-        text += f"{index}. @{username} — {points} points\n"
+        text += f"{index}. @{username} — {coins} MITH\n"
 
     await message.answer(text)
 
