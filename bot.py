@@ -223,7 +223,7 @@ async def balance(message: types.Message):
         points, coins, referrals = result
 
         await message.answer(
-            f"💰 Points: {points}\n"
+            f"💰 MITH Points: {points}\n"
             f"🪙 MITH Coins: {coins}\n"
             f"👥 Referrals: {referrals}"
         )
@@ -240,18 +240,28 @@ async def balance(message: types.Message):
 async def leaderboard(message: types.Message):
 
     cursor.execute(
-        "SELECT username, coins FROM users ORDER BY coins DESC LIMIT 10"
+        """
+        SELECT username, coins, points, referrals
+        FROM users
+        ORDER BY coins DESC, points DESC, referrals DESC
+        LIMIT 10
+        """
     )
 
     users = cursor.fetchall()
 
-    text = "🏆 MITH Coin Leaderboard\n\n"
+    text = "🏆 MITH Leaderboard\n\n"
 
     for index, user in enumerate(users, start=1):
 
-        username, coins = user
+        username, coins, points, referrals = user
 
-        text += f"{index}. @{username} — {coins} MITH\n"
+        text += (
+            f"{index}. @{username}\n"
+            f"🪙 MITH Coins: {coins}\n"
+            f"💰 MITH Points: {points}\n"
+            f"👥 Referrals: {referrals}\n\n"
+        )
 
     await message.answer(text)
 
