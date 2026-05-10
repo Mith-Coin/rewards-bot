@@ -239,22 +239,25 @@ async def balance(message: types.Message):
 @dp.message(Command("leaderboard"))
 async def leaderboard(message: types.Message):
 
+    user_id = message.from_user.id
+
+    # TOP 10 USERS
     cursor.execute(
         """
-        SELECT username, coins, points, referrals
+        SELECT telegram_id, username, coins, points, referrals
         FROM users
         ORDER BY coins DESC, points DESC, referrals DESC
         LIMIT 10
         """
     )
 
-    users = cursor.fetchall()
+    top_users = cursor.fetchall()
 
     text = "🏆 MITH Leaderboard\n\n"
 
-    for index, user in enumerate(users, start=1):
+    for index, user in enumerate(top_users, start=1):
 
-        username, coins, points, referrals = user
+        telegram_id, username, coins, points, referrals = user
 
         text += (
             f"{index}. @{username}\n"
@@ -262,6 +265,52 @@ async def leaderboard(message: types.Message):
             f"💰 MITH Points: {points}\n"
             f"👥 Referrals: {referrals}\n\n"
         )
+
+    # GET ALL USERS FOR RANKING
+    cursor.execute(
+        """
+        SELECT telegram_id
+        FROM users
+        ORDER BY coins DESC, points DESC, referrals DESC
+        """
+    )
+
+    all_users = cursor.fetchall()
+
+    user_rank = None
+
+    for index, user in enumerate(all_users, start=1):
+
+        if user[0] == user_id:
+            user_rank = index
+            break
+
+    # SHOW USER POSITION IF NOT IN TOP 10
+    if user_rank and user_rank > 10:
+
+        cursor.execute(
+            """
+            SELECT username, coins, points, referrals
+            FROM users
+            WHERE telegram_id=?
+            """,
+            (user_id,)
+        )
+
+        current_user = cursor.fetchone()
+
+        if current_user:
+
+            username, coins, points, referrals = current_user
+
+            text += (
+                f"━━━━━━━━━━━━━━\n"
+                f"📍 Your Position: #{user_rank}\n\n"
+                f"@{username}\n"
+                f"🪙 MITH Coins: {coins}\n"
+                f"💰 MITH Points: {points}\n"
+                f"👥 Referrals: {referrals}"
+            )
 
     await message.answer(text)
 
