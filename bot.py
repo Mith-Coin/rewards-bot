@@ -19,7 +19,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # DATABASE
-conn = sqlite3.connect("mith.db")
+conn = sqlite3.connect("/data/mith.db")
 cursor = conn.cursor()
 
 # USERS TABLE
