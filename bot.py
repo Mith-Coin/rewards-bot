@@ -82,20 +82,52 @@ def start_button():
     )
 
 # =========================
+# CANCEL BUTTON
+# =========================
+def cancel_button():
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="❌ Cancel",
+                    callback_data="cancel_transfer"
+                )
+            ]
+        ]
+    )
+
+# =========================
 # MAIN MENU
 # =========================
 def main_menu(user_id):
 
     buttons = [
 
+        # SOCIAL BUTTONS
         [
             InlineKeyboardButton(
-                text="💰 Balance",
-                callback_data="balance"
+                text="📸 Instagram",
+                url=INSTAGRAM_URL
+            ),
+
+            InlineKeyboardButton(
+                text="💬 Community",
+                url=TELEGRAM_COMMUNITY_URL
+            ),
+
+            InlineKeyboardButton(
+                text="📢 Group",
+                url=TELEGRAM_GROUP_URL
             )
         ],
 
         [
+            InlineKeyboardButton(
+                text="💰 Balance",
+                callback_data="balance"
+            ),
+
             InlineKeyboardButton(
                 text="🔁 Transfer",
                 callback_data="transfer"
@@ -106,10 +138,8 @@ def main_menu(user_id):
             InlineKeyboardButton(
                 text="💱 Convert",
                 callback_data="convert"
-            )
-        ],
+            ),
 
-        [
             InlineKeyboardButton(
                 text="👥 Referral",
                 callback_data="referral"
@@ -149,7 +179,7 @@ def main_menu(user_id):
     if show_daily:
 
         buttons.insert(
-            2,
+            3,
             [
                 InlineKeyboardButton(
                     text="🎁 Daily Reward",
@@ -209,7 +239,7 @@ async def start(message: types.Message):
             100
         ))
 
-        # REFERRAL SYSTEM
+        # REFERRAL REWARD
         if referral_code:
 
             cursor.execute(
@@ -527,7 +557,8 @@ async def transfer_start(
     await message.answer(
         f"💰 Your Balance: "
         f"{balance_value} MITH Coins\n\n"
-        f"👤 Enter receiver USER CODE:"
+        f"👤 Enter receiver USER CODE:",
+        reply_markup=cancel_button()
     )
 
 # =========================
@@ -551,7 +582,8 @@ async def get_user_code(
     if not receiver:
 
         return await message.answer(
-            "❌ Invalid user code. Try again:"
+            "❌ Invalid user code. Try again:",
+            reply_markup=cancel_button()
         )
 
     await state.update_data(
@@ -564,7 +596,8 @@ async def get_user_code(
 
     await message.answer(
         "💰 Enter the number of "
-        "MITH Coins to transfer:"
+        "MITH Coins to transfer:",
+        reply_markup=cancel_button()
     )
 
 # =========================
@@ -579,6 +612,7 @@ async def execute_transfer(
     sender_id = message.from_user.id
 
     try:
+
         amount = float(
             message.text.strip()
         )
@@ -586,13 +620,15 @@ async def execute_transfer(
     except ValueError:
 
         return await message.answer(
-            "❌ Enter valid number"
+            "❌ Enter valid number",
+            reply_markup=cancel_button()
         )
 
     if amount <= 0:
 
         return await message.answer(
-            "❌ Invalid amount"
+            "❌ Invalid amount",
+            reply_markup=cancel_button()
         )
 
     data = await state.get_data()
@@ -627,7 +663,6 @@ async def execute_transfer(
             reply_markup=start_button()
         )
 
-    # INSUFFICIENT BALANCE
     if sender_balance < amount:
 
         await state.clear()
@@ -656,7 +691,7 @@ async def execute_transfer(
 
     receiver_id = receiver[0]
 
-    # EXECUTE TRANSFER
+    # TRANSFER
     cursor.execute("""
         UPDATE users
         SET coins = coins - ?
@@ -738,6 +773,15 @@ async def callback_router(
 
             await callback.message.answer(
                 "🏠 Main Menu",
+                reply_markup=main_menu(user_id)
+            )
+
+        elif data == "cancel_transfer":
+
+            await state.clear()
+
+            await callback.message.answer(
+                "❌ Transfer Cancelled",
                 reply_markup=main_menu(user_id)
             )
 
