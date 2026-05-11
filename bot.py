@@ -29,7 +29,9 @@ dp = Dispatcher()
 conn = sqlite3.connect("/data/mith.db", check_same_thread=False)
 cursor = conn.cursor()
 
+# =========================
 # USERS TABLE
+# =========================
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     telegram_id INTEGER PRIMARY KEY,
@@ -65,11 +67,30 @@ class TransferState(StatesGroup):
 def main_menu(user_id):
 
     buttons = [
-        [InlineKeyboardButton(text="💰 Balance", callback_data="balance")],
-        [InlineKeyboardButton(text="🔁 Transfer", callback_data="transfer")],
-        [InlineKeyboardButton(text="💱 Convert", callback_data="convert")],
-        [InlineKeyboardButton(text="👥 Referral", callback_data="referral")],
-        [InlineKeyboardButton(text="🏆 Leaderboard", callback_data="leaderboard")]
+        [InlineKeyboardButton(
+            text="💰 Balance",
+            callback_data="balance"
+        )],
+
+        [InlineKeyboardButton(
+            text="🔁 Transfer",
+            callback_data="transfer"
+        )],
+
+        [InlineKeyboardButton(
+            text="💱 Convert",
+            callback_data="convert"
+        )],
+
+        [InlineKeyboardButton(
+            text="👥 Referral",
+            callback_data="referral"
+        )],
+
+        [InlineKeyboardButton(
+            text="🏆 Leaderboard",
+            callback_data="leaderboard"
+        )]
     ]
 
     # CHECK DAILY STATUS
@@ -102,7 +123,9 @@ def main_menu(user_id):
             )]
         )
 
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
 
 # =========================
 # START
@@ -131,11 +154,19 @@ async def start(message: types.Message):
 
         last = cursor.fetchone()[0]
 
-        user_code = str(int(last) + 1) if last else "100001"
+        user_code = (
+            str(int(last) + 1)
+            if last else "100001"
+        )
 
         cursor.execute("""
             INSERT INTO users
-            (telegram_id, user_code, username, points)
+            (
+                telegram_id,
+                user_code,
+                username,
+                points
+            )
             VALUES (?, ?, ?, ?)
         """, (
             user_id,
@@ -144,7 +175,7 @@ async def start(message: types.Message):
             100
         ))
 
-        # REFERRAL
+        # REFERRAL SYSTEM
         if referral_code:
 
             cursor.execute(
@@ -174,12 +205,20 @@ async def start(message: types.Message):
 # =========================
 # BALANCE FUNCTION
 # =========================
-async def balance(message: types.Message):
+async def balance(
+    message: types.Message,
+    user_id=None
+):
 
-    user_id = message.from_user.id
+    if not user_id:
+        user_id = message.from_user.id
 
     cursor.execute("""
-        SELECT user_code, points, coins, referrals
+        SELECT
+            user_code,
+            points,
+            coins,
+            referrals
         FROM users
         WHERE telegram_id=?
     """, (user_id,))
@@ -187,6 +226,7 @@ async def balance(message: types.Message):
     data = cursor.fetchone()
 
     if not data:
+
         return await message.answer(
             "❌ Use /start first",
             reply_markup=main_menu(user_id)
@@ -205,9 +245,13 @@ async def balance(message: types.Message):
 # =========================
 # CONVERT FUNCTION
 # =========================
-async def convert(message: types.Message):
+async def convert(
+    message: types.Message,
+    user_id=None
+):
 
-    user_id = message.from_user.id
+    if not user_id:
+        user_id = message.from_user.id
 
     cursor.execute(
         "SELECT points, coins FROM users WHERE telegram_id=?",
@@ -217,6 +261,7 @@ async def convert(message: types.Message):
     data = cursor.fetchone()
 
     if not data:
+
         return await message.answer(
             "❌ Use /start first",
             reply_markup=main_menu(user_id)
@@ -225,6 +270,7 @@ async def convert(message: types.Message):
     points, coins = data
 
     if points < 100:
+
         return await message.answer(
             "❌ Minimum 100 points required",
             reply_markup=main_menu(user_id)
@@ -246,7 +292,8 @@ async def convert(message: types.Message):
     conn.commit()
 
     await message.answer(
-        f"🎉 Converted {coins_added * 100} points → "
+        f"🎉 Converted "
+        f"{coins_added * 100} points → "
         f"{coins_added} MITH Coins",
         reply_markup=main_menu(user_id)
     )
@@ -254,9 +301,13 @@ async def convert(message: types.Message):
 # =========================
 # DAILY FUNCTION
 # =========================
-async def daily(message: types.Message):
+async def daily(
+    message: types.Message,
+    user_id=None
+):
 
-    user_id = message.from_user.id
+    if not user_id:
+        user_id = message.from_user.id
 
     cursor.execute(
         "SELECT last_daily FROM users WHERE telegram_id=?",
@@ -312,9 +363,13 @@ async def daily(message: types.Message):
 # =========================
 # REFERRAL FUNCTION
 # =========================
-async def referral(message: types.Message):
+async def referral(
+    message: types.Message,
+    user_id=None
+):
 
-    user_id = message.from_user.id
+    if not user_id:
+        user_id = message.from_user.id
 
     cursor.execute(
         "SELECT user_code FROM users WHERE telegram_id=?",
@@ -324,6 +379,7 @@ async def referral(message: types.Message):
     data = cursor.fetchone()
 
     if not data:
+
         return await message.answer(
             "❌ Use /start first",
             reply_markup=main_menu(user_id)
@@ -339,7 +395,8 @@ async def referral(message: types.Message):
     )
 
     await message.answer(
-        f"👥 Referral Link:\n\n{link}\n\n"
+        f"👥 Referral Link:\n\n"
+        f"{link}\n\n"
         f"🎁 Earn 500 points per referral!",
         reply_markup=main_menu(user_id)
     )
@@ -347,16 +404,27 @@ async def referral(message: types.Message):
 # =========================
 # LEADERBOARD FUNCTION
 # =========================
-async def leaderboard(message: types.Message):
+async def leaderboard(
+    message: types.Message,
+    user_id=None
+):
+
+    if not user_id:
+        user_id = message.from_user.id
 
     text = "🏆 MITH LEADERBOARD\n\n"
 
     cursor.execute("""
-        SELECT user_code, coins, points, referrals
+        SELECT
+            user_code,
+            coins,
+            points,
+            referrals
         FROM users
-        ORDER BY coins DESC,
-                 points DESC,
-                 referrals DESC
+        ORDER BY
+            coins DESC,
+            points DESC,
+            referrals DESC
         LIMIT 10
     """)
 
@@ -375,7 +443,7 @@ async def leaderboard(message: types.Message):
 
     await message.answer(
         text,
-        reply_markup=main_menu(message.from_user.id)
+        reply_markup=main_menu(user_id)
     )
 
 # =========================
@@ -383,10 +451,12 @@ async def leaderboard(message: types.Message):
 # =========================
 async def transfer_start(
     message: types.Message,
-    state: FSMContext
+    state: FSMContext,
+    user_id=None
 ):
 
-    user_id = message.from_user.id
+    if not user_id:
+        user_id = message.from_user.id
 
     cursor.execute(
         "SELECT coins FROM users WHERE telegram_id=?",
@@ -396,12 +466,13 @@ async def transfer_start(
     user = cursor.fetchone()
 
     if not user:
+
         return await message.answer(
             "❌ Use /start first",
             reply_markup=main_menu(user_id)
         )
 
-    balance = user[0]
+    balance_value = user[0]
 
     await state.set_state(
         TransferState.waiting_for_user_code
@@ -409,7 +480,7 @@ async def transfer_start(
 
     await message.answer(
         f"💰 Your Balance: "
-        f"{balance} MITH Coins\n\n"
+        f"{balance_value} MITH Coins\n\n"
         f"👤 Enter receiver USER CODE:",
         reply_markup=main_menu(user_id)
     )
@@ -426,14 +497,14 @@ async def get_user_code(
     receiver_code = message.text.strip()
 
     cursor.execute(
-        "SELECT telegram_id FROM users "
-        "WHERE user_code=?",
+        "SELECT telegram_id FROM users WHERE user_code=?",
         (receiver_code,)
     )
 
     receiver = cursor.fetchone()
 
     if not receiver:
+
         return await message.answer(
             "❌ Invalid user code. Try again:"
         )
@@ -449,7 +520,9 @@ async def get_user_code(
     await message.answer(
         "💰 Enter the number of "
         "MITH Coins to transfer:",
-        reply_markup=main_menu(message.from_user.id)
+        reply_markup=main_menu(
+            message.from_user.id
+        )
     )
 
 # =========================
@@ -464,15 +537,19 @@ async def execute_transfer(
     sender_id = message.from_user.id
 
     try:
-        amount = float(message.text.strip())
+        amount = float(
+            message.text.strip()
+        )
 
     except ValueError:
+
         return await message.answer(
             "❌ Enter valid number",
             reply_markup=main_menu(sender_id)
         )
 
     if amount <= 0:
+
         return await message.answer(
             "❌ Invalid amount",
             reply_markup=main_menu(sender_id)
@@ -522,8 +599,7 @@ async def execute_transfer(
         )
 
     cursor.execute(
-        "SELECT telegram_id FROM users "
-        "WHERE user_code=?",
+        "SELECT telegram_id FROM users WHERE user_code=?",
         (receiver_code,)
     )
 
@@ -574,35 +650,60 @@ async def execute_transfer(
 # COMMAND HANDLERS
 # =========================
 @dp.message(Command("balance"))
-async def balance_command(message: types.Message):
-    await balance(message)
+async def balance_command(
+    message: types.Message
+):
+    await balance(
+        message,
+        message.from_user.id
+    )
 
 @dp.message(Command("daily"))
-async def daily_command(message: types.Message):
-    await daily(message)
+async def daily_command(
+    message: types.Message
+):
+    await daily(
+        message,
+        message.from_user.id
+    )
 
 @dp.message(Command("convert"))
-async def convert_command(message: types.Message):
-    await convert(message)
+async def convert_command(
+    message: types.Message
+):
+    await convert(
+        message,
+        message.from_user.id
+    )
 
 @dp.message(Command("leaderboard"))
 async def leaderboard_command(
     message: types.Message
 ):
-    await leaderboard(message)
+    await leaderboard(
+        message,
+        message.from_user.id
+    )
 
 @dp.message(Command("referral"))
 async def referral_command(
     message: types.Message
 ):
-    await referral(message)
+    await referral(
+        message,
+        message.from_user.id
+    )
 
 @dp.message(Command("transfer"))
 async def transfer_command(
     message: types.Message,
     state: FSMContext
 ):
-    await transfer_start(message, state)
+    await transfer_start(
+        message,
+        state,
+        message.from_user.id
+    )
 
 # =========================
 # CALLBACK ROUTER
@@ -615,27 +716,51 @@ async def callback_router(
 
     data = callback.data
 
+    user_id = callback.from_user.id
+
     try:
 
         if data == "balance":
-            await balance(callback.message)
+
+            await balance(
+                callback.message,
+                user_id
+            )
 
         elif data == "daily":
-            await daily(callback.message)
+
+            await daily(
+                callback.message,
+                user_id
+            )
 
         elif data == "convert":
-            await convert(callback.message)
+
+            await convert(
+                callback.message,
+                user_id
+            )
 
         elif data == "referral":
-            await referral(callback.message)
+
+            await referral(
+                callback.message,
+                user_id
+            )
 
         elif data == "leaderboard":
-            await leaderboard(callback.message)
+
+            await leaderboard(
+                callback.message,
+                user_id
+            )
 
         elif data == "transfer":
+
             await transfer_start(
                 callback.message,
-                state
+                state,
+                user_id
             )
 
         await callback.answer()
@@ -646,9 +771,7 @@ async def callback_router(
 
         await callback.message.answer(
             "❌ Something went wrong",
-            reply_markup=main_menu(
-                callback.from_user.id
-            )
+            reply_markup=main_menu(user_id)
         )
 
 # =========================
@@ -660,5 +783,8 @@ async def main():
 
     await dp.start_polling(bot)
 
+# =========================
+# RUN BOT
+# =========================
 if __name__ == "__main__":
     asyncio.run(main())
