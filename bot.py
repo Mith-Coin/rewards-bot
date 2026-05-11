@@ -65,38 +65,65 @@ class TransferState(StatesGroup):
     waiting_for_amount = State()
 
 # =========================
+# START BUTTON
+# =========================
+def start_button():
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🚀 Start",
+                    callback_data="start_menu"
+                )
+            ]
+        ]
+    )
+
+# =========================
 # MAIN MENU
 # =========================
 def main_menu(user_id):
 
     buttons = [
-        [InlineKeyboardButton(
-            text="💰 Balance",
-            callback_data="balance"
-        )],
 
-        [InlineKeyboardButton(
-            text="🔁 Transfer",
-            callback_data="transfer"
-        )],
+        [
+            InlineKeyboardButton(
+                text="💰 Balance",
+                callback_data="balance"
+            )
+        ],
 
-        [InlineKeyboardButton(
-            text="💱 Convert",
-            callback_data="convert"
-        )],
+        [
+            InlineKeyboardButton(
+                text="🔁 Transfer",
+                callback_data="transfer"
+            )
+        ],
 
-        [InlineKeyboardButton(
-            text="👥 Referral",
-            callback_data="referral"
-        )],
+        [
+            InlineKeyboardButton(
+                text="💱 Convert",
+                callback_data="convert"
+            )
+        ],
 
-        [InlineKeyboardButton(
-            text="🏆 Leaderboard",
-            callback_data="leaderboard"
-        )]
+        [
+            InlineKeyboardButton(
+                text="👥 Referral",
+                callback_data="referral"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                text="🏆 Leaderboard",
+                callback_data="leaderboard"
+            )
+        ]
     ]
 
-    # DAILY REWARD VISIBILITY
+    # DAILY BUTTON HIDE
     cursor.execute(
         "SELECT last_daily FROM users WHERE telegram_id=?",
         (user_id,)
@@ -109,6 +136,7 @@ def main_menu(user_id):
     if data and data[0]:
 
         try:
+
             last = datetime.fromisoformat(data[0])
 
             if datetime.now() - last < timedelta(hours=24):
@@ -121,10 +149,12 @@ def main_menu(user_id):
 
         buttons.insert(
             2,
-            [InlineKeyboardButton(
-                text="🎁 Daily Reward",
-                callback_data="daily"
-            )]
+            [
+                InlineKeyboardButton(
+                    text="🎁 Daily Reward",
+                    callback_data="daily"
+                )
+            ]
         )
 
     return InlineKeyboardMarkup(
@@ -132,7 +162,7 @@ def main_menu(user_id):
     )
 
 # =========================
-# START
+# START COMMAND
 # =========================
 @dp.message(Command("start"))
 async def start(message: types.Message):
@@ -178,7 +208,7 @@ async def start(message: types.Message):
             100
         ))
 
-        # REFERRAL SYSTEM
+        # REFERRAL REWARD
         if referral_code:
 
             cursor.execute(
@@ -229,7 +259,7 @@ async def balance(message: types.Message, user_id=None):
 
         return await message.answer(
             "❌ Use /start first",
-            reply_markup=main_menu(user_id)
+            reply_markup=start_button()
         )
 
     code, points, coins, refs = data
@@ -239,7 +269,7 @@ async def balance(message: types.Message, user_id=None):
         f"💰 Points: {points}\n"
         f"🪙 Coins: {coins}\n"
         f"👥 Referrals: {refs}",
-        reply_markup=main_menu(user_id)
+        reply_markup=start_button()
     )
 
 # =========================
@@ -261,7 +291,7 @@ async def convert(message: types.Message, user_id=None):
 
         return await message.answer(
             "❌ Use /start first",
-            reply_markup=main_menu(user_id)
+            reply_markup=start_button()
         )
 
     points, coins = data
@@ -270,7 +300,7 @@ async def convert(message: types.Message, user_id=None):
 
         return await message.answer(
             "❌ Minimum 100 points required",
-            reply_markup=main_menu(user_id)
+            reply_markup=start_button()
         )
 
     coins_added = points // 100
@@ -292,7 +322,7 @@ async def convert(message: types.Message, user_id=None):
         f"🎉 Converted "
         f"{coins_added * 100} points → "
         f"{coins_added} MITH Coins",
-        reply_markup=main_menu(user_id)
+        reply_markup=start_button()
     )
 
 # =========================
@@ -331,7 +361,7 @@ async def daily(message: types.Message, user_id=None):
             return await message.answer(
                 f"⏳ Next reward in "
                 f"{hours}h {minutes}m",
-                reply_markup=main_menu(user_id)
+                reply_markup=start_button()
             )
 
     reward = random.randint(20, 50)
@@ -351,7 +381,7 @@ async def daily(message: types.Message, user_id=None):
 
     await message.answer(
         f"🎁 You earned {reward} MITH Points",
-        reply_markup=main_menu(user_id)
+        reply_markup=start_button()
     )
 
 # =========================
@@ -373,7 +403,7 @@ async def referral(message: types.Message, user_id=None):
 
         return await message.answer(
             "❌ Use /start first",
-            reply_markup=main_menu(user_id)
+            reply_markup=start_button()
         )
 
     code = data[0]
@@ -389,7 +419,7 @@ async def referral(message: types.Message, user_id=None):
         f"👥 Referral Link:\n\n"
         f"{link}\n\n"
         f"🎁 Earn 500 points per referral!",
-        reply_markup=main_menu(user_id)
+        reply_markup=start_button()
     )
 
 # =========================
@@ -431,7 +461,7 @@ async def leaderboard(message: types.Message, user_id=None):
 
     await message.answer(
         text,
-        reply_markup=main_menu(user_id)
+        reply_markup=start_button()
     )
 
 # =========================
@@ -457,7 +487,7 @@ async def transfer_start(
 
         return await message.answer(
             "❌ Use /start first",
-            reply_markup=main_menu(user_id)
+            reply_markup=start_button()
         )
 
     balance_value = user[0]
@@ -473,7 +503,7 @@ async def transfer_start(
     )
 
 # =========================
-# GET USER CODE
+# RECEIVE USER CODE
 # =========================
 @dp.message(TransferState.waiting_for_user_code)
 async def get_user_code(
@@ -521,6 +551,7 @@ async def execute_transfer(
     sender_id = message.from_user.id
 
     try:
+
         amount = float(
             message.text.strip()
         )
@@ -555,7 +586,7 @@ async def execute_transfer(
 
         return await message.answer(
             "❌ Use /start first",
-            reply_markup=main_menu(sender_id)
+            reply_markup=start_button()
         )
 
     sender_balance, sender_code = sender
@@ -566,7 +597,7 @@ async def execute_transfer(
 
         return await message.answer(
             "❌ Cannot transfer to yourself",
-            reply_markup=main_menu(sender_id)
+            reply_markup=start_button()
         )
 
     # INSUFFICIENT BALANCE
@@ -577,7 +608,7 @@ async def execute_transfer(
         return await message.answer(
             "❌ Insufficient balance\n"
             "🚫 Transfer cancelled",
-            reply_markup=main_menu(sender_id)
+            reply_markup=start_button()
         )
 
     cursor.execute(
@@ -593,12 +624,12 @@ async def execute_transfer(
 
         return await message.answer(
             "❌ Receiver not found",
-            reply_markup=main_menu(sender_id)
+            reply_markup=start_button()
         )
 
     receiver_id = receiver[0]
 
-    # EXECUTE TRANSFER
+    # TRANSFER
     cursor.execute("""
         UPDATE users
         SET coins = coins - ?
@@ -625,7 +656,7 @@ async def execute_transfer(
         f"✅ Transfer successful!\n\n"
         f"🪙 Sent: {amount} MITH Coins\n"
         f"👤 To: {receiver_code}",
-        reply_markup=main_menu(sender_id)
+        reply_markup=start_button()
     )
 
 # =========================
@@ -633,34 +664,30 @@ async def execute_transfer(
 # =========================
 @dp.message(Command("balance"))
 async def balance_command(message: types.Message):
-    await balance(message, message.from_user.id)
+    await balance(message)
 
 @dp.message(Command("daily"))
 async def daily_command(message: types.Message):
-    await daily(message, message.from_user.id)
+    await daily(message)
 
 @dp.message(Command("convert"))
 async def convert_command(message: types.Message):
-    await convert(message, message.from_user.id)
+    await convert(message)
 
 @dp.message(Command("leaderboard"))
 async def leaderboard_command(message: types.Message):
-    await leaderboard(message, message.from_user.id)
+    await leaderboard(message)
 
 @dp.message(Command("referral"))
 async def referral_command(message: types.Message):
-    await referral(message, message.from_user.id)
+    await referral(message)
 
 @dp.message(Command("transfer"))
 async def transfer_command(
     message: types.Message,
     state: FSMContext
 ):
-    await transfer_start(
-        message,
-        state,
-        message.from_user.id
-    )
+    await transfer_start(message, state)
 
 # =========================
 # CALLBACK ROUTER
@@ -676,7 +703,14 @@ async def callback_router(
 
     try:
 
-        if data == "balance":
+        if data == "start_menu":
+
+            await callback.message.answer(
+                "👇 Select an option",
+                reply_markup=main_menu(user_id)
+            )
+
+        elif data == "balance":
 
             await balance(
                 callback.message,
@@ -727,7 +761,7 @@ async def callback_router(
 
         await callback.message.answer(
             "❌ Something went wrong",
-            reply_markup=main_menu(user_id)
+            reply_markup=start_button()
         )
 
 # =========================
