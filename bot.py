@@ -17,11 +17,11 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# DATABASE (Railway persistent volume)
+# DATABASE
 conn = sqlite3.connect("/data/mith.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# CREATE USERS TABLE
+# USERS TABLE
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     telegram_id INTEGER PRIMARY KEY,
@@ -42,7 +42,7 @@ TELEGRAM_GROUP_URL = "https://t.me/mith_coin_official"
 TELEGRAM_COMMUNITY_URL = "https://t.me/mith_india"
 
 
-# START COMMAND
+# START
 @dp.message(Command("start"))
 async def start(message: types.Message):
 
@@ -57,7 +57,6 @@ async def start(message: types.Message):
 
     if not user:
 
-        # generate numeric user_code
         cursor.execute("SELECT MAX(CAST(user_code AS INTEGER)) FROM users")
         last = cursor.fetchone()[0]
 
@@ -68,7 +67,6 @@ async def start(message: types.Message):
             VALUES (?, ?, ?, ?)
         """, (user_id, user_code, username, 100))
 
-        # referral reward
         if referral_code:
             cursor.execute(
                 "SELECT telegram_id FROM users WHERE user_code=?",
@@ -100,7 +98,8 @@ async def start(message: types.Message):
         "/convert\n"
         "/balance\n"
         "/leaderboard\n"
-        "/referral\n",
+        "/referral\n"
+        "/transfer <user_code> <amount>\n",
         reply_markup=keyboard
     )
 
@@ -199,11 +198,7 @@ async def leaderboard(message: types.Message):
 
     user_id = message.from_user.id
 
-    # header
-    text = (
-        "🏆 MITH LEADERBOARD\n"
-        "ID | Coins | Points | Referrals\n\n"
-    )
+    text = "🏆 MITH LEADERBOARD\nID | Coins | Points | Referrals\n\n"
 
     cursor.execute("""
         SELECT user_code, username, coins, points, referrals
@@ -217,34 +212,6 @@ async def leaderboard(message: types.Message):
     for i, u in enumerate(top, 1):
         code, username, coins, points, refs = u
         text += f"{i}. {code} | 🪙{coins} | 💰{points} | 👥{refs}\n"
-
-    # user rank
-    cursor.execute("""
-        SELECT telegram_id, user_code, coins, points, referrals
-        FROM users
-        ORDER BY coins DESC, points DESC, referrals DESC
-    """)
-
-    all_users = cursor.fetchall()
-
-    rank = None
-    for i, u in enumerate(all_users, 1):
-        if u[0] == user_id:
-            rank = i
-            break
-
-    if rank and rank > 10:
-        cursor.execute("""
-            SELECT user_code, coins, points, referrals
-            FROM users
-            WHERE telegram_id=?
-        """, (user_id,))
-
-        me = cursor.fetchone()
-
-        if me:
-            code, coins, points, refs = me
-            text += f"\n📍 Your Rank #{rank}\n{code} | 🪙{coins} | 💰{points} | 👥{refs}"
 
     await message.answer(text)
 
@@ -269,6 +236,81 @@ async def referral(message: types.Message):
     await message.answer(
         f"👥 Referral Link:\n{link}\n\n"
         f"🎁 Earn 500 points per referral!"
+    )
+
+
+# =========================
+# 🔥 MUTUAL TRANSFER SYSTEM
+# =========================
+@dp.message(Command("transfer"))
+async def transfer(message: types.Message):
+
+    args = message.text.split()
+
+    if len(args) != 3:
+        return await message.answer("❌ Usage:\n/transfer <user_code> <amount>")
+
+    sender_id = message.from_user.id
+    receiver_code = args[1]
+
+    try:
+        amount = float(args[2])
+    except ValueError:
+        return await message.answer("❌ Invalid amount")
+
+    if amount <= 0:
+        return await message.answer("❌ Amount must be greater than 0")
+
+    # sender data
+    cursor.execute("""
+        SELECT coins, user_code
+        FROM users
+        WHERE telegram_id=?
+    """, (sender_id,))
+    sender = cursor.fetchone()
+
+    if not sender:
+        return await message.answer("❌ Use /start first")
+
+    sender_balance, sender_code = sender
+
+    # prevent self transfer
+    if sender_code == receiver_code:
+        return await message.answer("❌ You cannot transfer to yourself")
+
+    if sender_balance < amount:
+        return await message.answer("❌ Insufficient balance")
+
+    # receiver data
+    cursor.execute("""
+        SELECT telegram_id FROM users WHERE user_code=?
+    """, (receiver_code,))
+    receiver = cursor.fetchone()
+
+    if not receiver:
+        return await message.answer("❌ Receiver not found")
+
+    receiver_id = receiver[0]
+
+    # execute transfer
+    cursor.execute("""
+        UPDATE users
+        SET coins = coins - ?
+        WHERE telegram_id=?
+    """, (amount, sender_id))
+
+    cursor.execute("""
+        UPDATE users
+        SET coins = coins + ?
+        WHERE telegram_id=?
+    """, (amount, receiver_id))
+
+    conn.commit()
+
+    await message.answer(
+        f"✅ Transfer successful\n"
+        f"🪙 Sent: {amount} MITH Coins\n"
+        f"👤 To: {receiver_code}"
     )
 
 
