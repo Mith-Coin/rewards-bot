@@ -8,6 +8,7 @@ from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 import os
 
@@ -21,7 +22,9 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 # BOT SETUP
 # =========================
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
+
+storage = MemoryStorage()
+dp = Dispatcher(storage=storage)
 
 # =========================
 # DATABASE
@@ -62,7 +65,7 @@ class TransferState(StatesGroup):
     waiting_for_amount = State()
 
 # =========================
-# DYNAMIC MENU
+# MAIN MENU
 # =========================
 def main_menu(user_id):
 
@@ -93,7 +96,7 @@ def main_menu(user_id):
         )]
     ]
 
-    # CHECK DAILY STATUS
+    # DAILY REWARD VISIBILITY
     cursor.execute(
         "SELECT last_daily FROM users WHERE telegram_id=?",
         (user_id,)
@@ -115,6 +118,7 @@ def main_menu(user_id):
             pass
 
     if show_daily:
+
         buttons.insert(
             2,
             [InlineKeyboardButton(
@@ -160,8 +164,7 @@ async def start(message: types.Message):
         )
 
         cursor.execute("""
-            INSERT INTO users
-            (
+            INSERT INTO users (
                 telegram_id,
                 user_code,
                 username,
@@ -203,12 +206,9 @@ async def start(message: types.Message):
     )
 
 # =========================
-# BALANCE FUNCTION
+# BALANCE
 # =========================
-async def balance(
-    message: types.Message,
-    user_id=None
-):
+async def balance(message: types.Message, user_id=None):
 
     if not user_id:
         user_id = message.from_user.id
@@ -243,12 +243,9 @@ async def balance(
     )
 
 # =========================
-# CONVERT FUNCTION
+# CONVERT
 # =========================
-async def convert(
-    message: types.Message,
-    user_id=None
-):
+async def convert(message: types.Message, user_id=None):
 
     if not user_id:
         user_id = message.from_user.id
@@ -299,12 +296,9 @@ async def convert(
     )
 
 # =========================
-# DAILY FUNCTION
+# DAILY
 # =========================
-async def daily(
-    message: types.Message,
-    user_id=None
-):
+async def daily(message: types.Message, user_id=None):
 
     if not user_id:
         user_id = message.from_user.id
@@ -361,12 +355,9 @@ async def daily(
     )
 
 # =========================
-# REFERRAL FUNCTION
+# REFERRAL
 # =========================
-async def referral(
-    message: types.Message,
-    user_id=None
-):
+async def referral(message: types.Message, user_id=None):
 
     if not user_id:
         user_id = message.from_user.id
@@ -402,12 +393,9 @@ async def referral(
     )
 
 # =========================
-# LEADERBOARD FUNCTION
+# LEADERBOARD
 # =========================
-async def leaderboard(
-    message: types.Message,
-    user_id=None
-):
+async def leaderboard(message: types.Message, user_id=None):
 
     if not user_id:
         user_id = message.from_user.id
@@ -481,12 +469,11 @@ async def transfer_start(
     await message.answer(
         f"💰 Your Balance: "
         f"{balance_value} MITH Coins\n\n"
-        f"👤 Enter receiver USER CODE:",
-        reply_markup=main_menu(user_id)
+        f"👤 Enter receiver USER CODE:"
     )
 
 # =========================
-# RECEIVE USER CODE
+# GET USER CODE
 # =========================
 @dp.message(TransferState.waiting_for_user_code)
 async def get_user_code(
@@ -519,10 +506,7 @@ async def get_user_code(
 
     await message.answer(
         "💰 Enter the number of "
-        "MITH Coins to transfer:",
-        reply_markup=main_menu(
-            message.from_user.id
-        )
+        "MITH Coins to transfer:"
     )
 
 # =========================
@@ -544,15 +528,13 @@ async def execute_transfer(
     except ValueError:
 
         return await message.answer(
-            "❌ Enter valid number",
-            reply_markup=main_menu(sender_id)
+            "❌ Enter valid number"
         )
 
     if amount <= 0:
 
         return await message.answer(
-            "❌ Invalid amount",
-            reply_markup=main_menu(sender_id)
+            "❌ Invalid amount"
         )
 
     data = await state.get_data()
@@ -647,52 +629,27 @@ async def execute_transfer(
     )
 
 # =========================
-# COMMAND HANDLERS
+# COMMANDS
 # =========================
 @dp.message(Command("balance"))
-async def balance_command(
-    message: types.Message
-):
-    await balance(
-        message,
-        message.from_user.id
-    )
+async def balance_command(message: types.Message):
+    await balance(message, message.from_user.id)
 
 @dp.message(Command("daily"))
-async def daily_command(
-    message: types.Message
-):
-    await daily(
-        message,
-        message.from_user.id
-    )
+async def daily_command(message: types.Message):
+    await daily(message, message.from_user.id)
 
 @dp.message(Command("convert"))
-async def convert_command(
-    message: types.Message
-):
-    await convert(
-        message,
-        message.from_user.id
-    )
+async def convert_command(message: types.Message):
+    await convert(message, message.from_user.id)
 
 @dp.message(Command("leaderboard"))
-async def leaderboard_command(
-    message: types.Message
-):
-    await leaderboard(
-        message,
-        message.from_user.id
-    )
+async def leaderboard_command(message: types.Message):
+    await leaderboard(message, message.from_user.id)
 
 @dp.message(Command("referral"))
-async def referral_command(
-    message: types.Message
-):
-    await referral(
-        message,
-        message.from_user.id
-    )
+async def referral_command(message: types.Message):
+    await referral(message, message.from_user.id)
 
 @dp.message(Command("transfer"))
 async def transfer_command(
@@ -715,7 +672,6 @@ async def callback_router(
 ):
 
     data = callback.data
-
     user_id = callback.from_user.id
 
     try:
