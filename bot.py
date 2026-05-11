@@ -116,6 +116,35 @@ async def start(message: types.Message):
 
 
 # =========================
+# BALANCE
+# =========================
+@dp.message(Command("balance"))
+async def balance(message: types.Message):
+
+    user_id = message.from_user.id
+
+    cursor.execute("""
+        SELECT user_code, points, coins, referrals
+        FROM users
+        WHERE telegram_id=?
+    """, (user_id,))
+
+    data = cursor.fetchone()
+
+    if not data:
+        return await message.answer("❌ Use /start first")
+
+    code, points, coins, refs = data
+
+    await message.answer(
+        f"🆔 ID: {code}\n"
+        f"💰 Points: {points}\n"
+        f"🪙 Coins: {coins}\n"
+        f"👥 Referrals: {refs}"
+    )
+
+
+# =========================
 # CONVERT
 # =========================
 @dp.message(Command("convert"))
@@ -181,31 +210,27 @@ async def daily(message: types.Message):
 
 
 # =========================
-# BALANCE
+# REFERRAL
 # =========================
-@dp.message(Command("balance"))
-async def balance(message: types.Message):
+@dp.message(Command("referral"))
+async def referral(message: types.Message):
 
     user_id = message.from_user.id
 
-    cursor.execute("""
-        SELECT user_code, points, coins, referrals
-        FROM users
-        WHERE telegram_id=?
-    """, (user_id,))
-
+    cursor.execute("SELECT user_code FROM users WHERE telegram_id=?", (user_id,))
     data = cursor.fetchone()
 
     if not data:
         return await message.answer("❌ Use /start first")
 
-    code, points, coins, refs = data
+    code = data[0]
+
+    bot_info = await bot.get_me()
+    link = f"https://t.me/{bot_info.username}?start={code}"
 
     await message.answer(
-        f"🆔 ID: {code}\n"
-        f"💰 Points: {points}\n"
-        f"🪙 Coins: {coins}\n"
-        f"👥 Referrals: {refs}"
+        f"👥 Referral Link:\n{link}\n\n"
+        f"🎁 Earn 500 points per referral!"
     )
 
 
@@ -234,39 +259,33 @@ async def leaderboard(message: types.Message):
 
 
 # =========================
-# REFERRAL
-# =========================
-@dp.message(Command("referral"))
-async def referral(message: types.Message):
-
-    user_id = message.from_user.id
-
-    cursor.execute("SELECT user_code FROM users WHERE telegram_id=?", (user_id,))
-    data = cursor.fetchone()
-
-    if not data:
-        return await message.answer("❌ Use /start first")
-
-    code = data[0]
-
-    bot_info = await bot.get_me()
-    link = f"https://t.me/{bot_info.username}?start={code}"
-
-    await message.answer(
-        f"👥 Referral Link:\n{link}\n\n"
-        f"🎁 Earn 500 points per referral!"
-    )
-
-
-# =========================
-# 🔥 TRANSFER SYSTEM (FSM)
+# 🔥 TRANSFER SYSTEM (UPDATED FLOW)
 # =========================
 
 @dp.message(Command("transfer"))
 async def transfer_start(message: types.Message, state: FSMContext):
 
+    user_id = message.from_user.id
+
+    # show balance first
+    cursor.execute("""
+        SELECT coins, user_code
+        FROM users
+        WHERE telegram_id=?
+    """, (user_id,))
+    user = cursor.fetchone()
+
+    if not user:
+        return await message.answer("❌ Use /start first")
+
+    balance, code = user
+
     await state.set_state(TransferState.waiting_for_user_code)
-    await message.answer("👤 Enter receiver USER CODE:")
+
+    await message.answer(
+        f"💰 Your Balance: {balance} MITH Coins\n\n"
+        "👤 Enter receiver USER CODE:"
+    )
 
 
 @dp.message(TransferState.waiting_for_user_code)
@@ -274,7 +293,10 @@ async def get_user_code(message: types.Message, state: FSMContext):
 
     receiver_code = message.text.strip()
 
-    cursor.execute("SELECT telegram_id FROM users WHERE user_code=?", (receiver_code,))
+    cursor.execute(
+        "SELECT telegram_id FROM users WHERE user_code=?",
+        (receiver_code,)
+    )
     receiver = cursor.fetchone()
 
     if not receiver:
@@ -284,7 +306,9 @@ async def get_user_code(message: types.Message, state: FSMContext):
 
     await state.set_state(TransferState.waiting_for_amount)
 
-    await message.answer("💰 Enter amount to transfer:")
+    await message.answer(
+        "💰 Enter the number of MITH Coins to transfer:"
+    )
 
 
 @dp.message(TransferState.waiting_for_amount)
@@ -320,7 +344,7 @@ async def execute_transfer(message: types.Message, state: FSMContext):
         await state.clear()
         return await message.answer("❌ Cannot transfer to yourself")
 
-    # 🔴 STRICT INSUFFICIENT BALANCE HANDLING
+    # 🔴 INSIDE BALANCE CHECK
     if sender_balance < amount:
         await state.clear()
         return await message.answer(
@@ -328,7 +352,10 @@ async def execute_transfer(message: types.Message, state: FSMContext):
             "🚫 Transfer cancelled"
         )
 
-    cursor.execute("SELECT telegram_id FROM users WHERE user_code=?", (receiver_code,))
+    cursor.execute(
+        "SELECT telegram_id FROM users WHERE user_code=?",
+        (receiver_code,)
+    )
     receiver = cursor.fetchone()
 
     if not receiver:
@@ -337,6 +364,7 @@ async def execute_transfer(message: types.Message, state: FSMContext):
 
     receiver_id = receiver[0]
 
+    # transfer
     cursor.execute("""
         UPDATE users
         SET coins = coins - ?
