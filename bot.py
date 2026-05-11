@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.context import FSMContext
 from dotenv import load_dotenv
 import os
 
@@ -40,6 +42,14 @@ conn.commit()
 INSTAGRAM_URL = "https://www.instagram.com/mith_coin?igsh=dmJnOXpibDVzeTF4"
 TELEGRAM_GROUP_URL = "https://t.me/mith_coin_official"
 TELEGRAM_COMMUNITY_URL = "https://t.me/mith_india"
+
+
+# =========================
+# FSM STATE (TRANSFER FLOW)
+# =========================
+class TransferState(StatesGroup):
+    waiting_for_user_code = State()
+    waiting_for_amount = State()
 
 
 # START
@@ -92,19 +102,20 @@ async def start(message: types.Message):
 
     await message.answer(
         "🎁 Welcome to MITH Rewards\n\n"
-        "You received 100 MITH Points!\n\n"
         "Commands:\n"
         "/daily\n"
         "/convert\n"
         "/balance\n"
         "/leaderboard\n"
         "/referral\n"
-        "/transfer <user_code> <amount>\n",
+        "/transfer\n",
         reply_markup=keyboard
     )
 
 
+# =========================
 # CONVERT
+# =========================
 @dp.message(Command("convert"))
 async def convert(message: types.Message):
 
@@ -137,7 +148,9 @@ async def convert(message: types.Message):
     )
 
 
+# =========================
 # DAILY
+# =========================
 @dp.message(Command("daily"))
 async def daily(message: types.Message):
 
@@ -165,7 +178,9 @@ async def daily(message: types.Message):
     await message.answer(f"🎁 You earned {reward} MITH Points")
 
 
+# =========================
 # BALANCE
+# =========================
 @dp.message(Command("balance"))
 async def balance(message: types.Message):
 
@@ -192,11 +207,11 @@ async def balance(message: types.Message):
     )
 
 
+# =========================
 # LEADERBOARD
+# =========================
 @dp.message(Command("leaderboard"))
 async def leaderboard(message: types.Message):
-
-    user_id = message.from_user.id
 
     text = "🏆 MITH LEADERBOARD\nID | Coins | Points | Referrals\n\n"
 
@@ -216,7 +231,9 @@ async def leaderboard(message: types.Message):
     await message.answer(text)
 
 
+# =========================
 # REFERRAL
+# =========================
 @dp.message(Command("referral"))
 async def referral(message: types.Message):
 
@@ -240,28 +257,54 @@ async def referral(message: types.Message):
 
 
 # =========================
-# 🔥 MUTUAL TRANSFER SYSTEM
+# 🔥 TRANSFER FLOW (FSM)
 # =========================
+
 @dp.message(Command("transfer"))
-async def transfer(message: types.Message):
+async def transfer_start(message: types.Message, state: FSMContext):
 
-    args = message.text.split()
+    await state.set_state(TransferState.waiting_for_user_code)
 
-    if len(args) != 3:
-        return await message.answer("❌ Usage:\n/transfer <user_code> <amount>")
+    await message.answer("👤 Enter receiver USER CODE:")
+
+
+@dp.message(TransferState.waiting_for_user_code)
+async def get_user_code(message: types.Message, state: FSMContext):
+
+    receiver_code = message.text.strip()
+
+    cursor.execute(
+        "SELECT telegram_id FROM users WHERE user_code=?",
+        (receiver_code,)
+    )
+    receiver = cursor.fetchone()
+
+    if not receiver:
+        return await message.answer("❌ User not found. Enter valid USER CODE:")
+
+    await state.update_data(receiver_code=receiver_code)
+
+    await state.set_state(TransferState.waiting_for_amount)
+
+    await message.answer("💰 Enter amount to transfer:")
+
+
+@dp.message(TransferState.waiting_for_amount)
+async def execute_transfer(message: types.Message, state: FSMContext):
 
     sender_id = message.from_user.id
-    receiver_code = args[1]
 
     try:
-        amount = float(args[2])
+        amount = float(message.text.strip())
     except ValueError:
-        return await message.answer("❌ Invalid amount")
+        return await message.answer("❌ Enter valid number")
 
     if amount <= 0:
         return await message.answer("❌ Amount must be greater than 0")
 
-    # sender data
+    data = await state.get_data()
+    receiver_code = data["receiver_code"]
+
     cursor.execute("""
         SELECT coins, user_code
         FROM users
@@ -270,29 +313,30 @@ async def transfer(message: types.Message):
     sender = cursor.fetchone()
 
     if not sender:
+        await state.clear()
         return await message.answer("❌ Use /start first")
 
     sender_balance, sender_code = sender
 
-    # prevent self transfer
     if sender_code == receiver_code:
-        return await message.answer("❌ You cannot transfer to yourself")
+        await state.clear()
+        return await message.answer("❌ Cannot transfer to yourself")
 
     if sender_balance < amount:
+        await state.clear()
         return await message.answer("❌ Insufficient balance")
 
-    # receiver data
     cursor.execute("""
         SELECT telegram_id FROM users WHERE user_code=?
     """, (receiver_code,))
     receiver = cursor.fetchone()
 
     if not receiver:
+        await state.clear()
         return await message.answer("❌ Receiver not found")
 
     receiver_id = receiver[0]
 
-    # execute transfer
     cursor.execute("""
         UPDATE users
         SET coins = coins - ?
@@ -307,14 +351,18 @@ async def transfer(message: types.Message):
 
     conn.commit()
 
+    await state.clear()
+
     await message.answer(
-        f"✅ Transfer successful\n"
+        f"✅ Transfer successful!\n"
         f"🪙 Sent: {amount} MITH Coins\n"
         f"👤 To: {receiver_code}"
     )
 
 
+# =========================
 # MAIN
+# =========================
 async def main():
     print("MITH Bot Running...")
     await dp.start_polling(bot)
