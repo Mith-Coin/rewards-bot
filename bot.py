@@ -38,6 +38,57 @@ CREATE TABLE IF NOT EXISTS users (
 
 conn.commit()
 
+# ADD user_code COLUMN IF MISSING
+try:
+    cursor.execute(
+        "ALTER TABLE users ADD COLUMN user_code TEXT"
+    )
+    conn.commit()
+except:
+    pass
+
+# GENERATE USER CODES FOR OLD USERS
+cursor.execute(
+    """
+    SELECT telegram_id
+    FROM users
+    WHERE user_code IS NULL
+    """
+)
+
+old_users = cursor.fetchall()
+
+cursor.execute(
+    "SELECT MAX(CAST(user_code AS INTEGER)) FROM users"
+)
+
+last_code = cursor.fetchone()[0]
+
+if last_code:
+    counter = int(last_code) + 1
+else:
+    counter = 100001
+
+for old_user in old_users:
+
+    telegram_id = old_user[0]
+
+    cursor.execute(
+        """
+        UPDATE users
+        SET user_code=?
+        WHERE telegram_id=?
+        """,
+        (
+            str(counter),
+            telegram_id
+        )
+    )
+
+    counter += 1
+
+conn.commit()
+
 # SOCIAL LINKS
 INSTAGRAM_URL = "https://www.instagram.com/mith_coin?igsh=dmJnOXpibDVzeTF4"
 TELEGRAM_GROUP_URL = "https://t.me/mith_coin_official"
@@ -76,7 +127,7 @@ async def start(message: types.Message):
         last_user = cursor.fetchone()[0]
 
         if last_user:
-            user_code = str(last_user + 1)
+            user_code = str(int(last_user) + 1)
         else:
             user_code = "100001"
 
@@ -179,7 +230,11 @@ async def convert(message: types.Message):
     result = cursor.fetchone()
 
     if not result:
-        await message.answer("❌ Use /start first")
+
+        await message.answer(
+            "❌ Use /start first"
+        )
+
         return
 
     points, coins = result
@@ -307,7 +362,6 @@ async def leaderboard(message: types.Message):
 
     user_id = message.from_user.id
 
-    # TOP 10 USERS
     cursor.execute(
         """
         SELECT telegram_id,
@@ -348,7 +402,7 @@ async def leaderboard(message: types.Message):
             f"👥 {referrals}\n"
         )
 
-    # GET USER RANK
+    # USER RANK
     cursor.execute(
         """
         SELECT telegram_id
