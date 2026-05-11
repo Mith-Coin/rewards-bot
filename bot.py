@@ -22,10 +22,11 @@ dp = Dispatcher()
 conn = sqlite3.connect("/data/mith.db")
 cursor = conn.cursor()
 
-# USERS TABLE
+# CREATE USERS TABLE
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     telegram_id INTEGER PRIMARY KEY,
+    user_code TEXT UNIQUE,
     username TEXT,
     points INTEGER DEFAULT 0,
     coins REAL DEFAULT 0,
@@ -52,11 +53,12 @@ async def start(message: types.Message):
 
     args = message.text.split()
 
-    referral_id = None
+    referral_code = None
 
     if len(args) > 1:
-        referral_id = args[1]
+        referral_code = args[1]
 
+    # CHECK USER
     cursor.execute(
         "SELECT * FROM users WHERE telegram_id=?",
         (user_id,)
@@ -66,18 +68,62 @@ async def start(message: types.Message):
 
     if not user:
 
+        # GENERATE NUMERIC USER CODE
         cursor.execute(
-            "INSERT INTO users (telegram_id, username, points) VALUES (?, ?, ?)",
-            (user_id, username, 100)
+            "SELECT MAX(CAST(user_code AS INTEGER)) FROM users"
+        )
+
+        last_user = cursor.fetchone()[0]
+
+        if last_user:
+            user_code = str(last_user + 1)
+        else:
+            user_code = "100001"
+
+        # CREATE USER
+        cursor.execute(
+            """
+            INSERT INTO users (
+                telegram_id,
+                user_code,
+                username,
+                points
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                user_code,
+                username,
+                100
+            )
         )
 
         # REFERRAL REWARD
-        if referral_id and str(referral_id) != str(user_id):
+        if referral_code:
 
             cursor.execute(
-                "UPDATE users SET points = points + 500, referrals = referrals + 1 WHERE telegram_id=?",
-                (referral_id,)
+                "SELECT telegram_id FROM users WHERE user_code=?",
+                (referral_code,)
             )
+
+            ref_user = cursor.fetchone()
+
+            if ref_user:
+
+                ref_telegram_id = ref_user[0]
+
+                if ref_telegram_id != user_id:
+
+                    cursor.execute(
+                        """
+                        UPDATE users
+                        SET points = points + 500,
+                            referrals = referrals + 1
+                        WHERE telegram_id=?
+                        """,
+                        (ref_telegram_id,)
+                    )
 
         conn.commit()
 
@@ -139,9 +185,11 @@ async def convert(message: types.Message):
     points, coins = result
 
     if points < 100:
+
         await message.answer(
             "❌ Minimum 100 points required."
         )
+
         return
 
     mith_coins = points // 100
@@ -151,7 +199,11 @@ async def convert(message: types.Message):
     updated_coins = coins + mith_coins
 
     cursor.execute(
-        "UPDATE users SET points=?, coins=? WHERE telegram_id=?",
+        """
+        UPDATE users
+        SET points=?, coins=?
+        WHERE telegram_id=?
+        """,
         (
             remaining_points,
             updated_coins,
@@ -194,8 +246,17 @@ async def daily(message: types.Message):
     reward = random.randint(20, 50)
 
     cursor.execute(
-        "UPDATE users SET points = points + ?, last_daily=? WHERE telegram_id=?",
-        (reward, datetime.now().isoformat(), user_id)
+        """
+        UPDATE users
+        SET points = points + ?,
+            last_daily=?
+        WHERE telegram_id=?
+        """,
+        (
+            reward,
+            datetime.now().isoformat(),
+            user_id
+        )
     )
 
     conn.commit()
@@ -212,7 +273,11 @@ async def balance(message: types.Message):
     user_id = message.from_user.id
 
     cursor.execute(
-        "SELECT points, coins, referrals FROM users WHERE telegram_id=?",
+        """
+        SELECT user_code, points, coins, referrals
+        FROM users
+        WHERE telegram_id=?
+        """,
         (user_id,)
     )
 
@@ -220,9 +285,10 @@ async def balance(message: types.Message):
 
     if result:
 
-        points, coins, referrals = result
+        user_code, points, coins, referrals = result
 
         await message.answer(
+            f"🆔 User ID: {user_code}\n"
             f"💰 MITH Points: {points}\n"
             f"🪙 MITH Coins: {coins}\n"
             f"👥 Referrals: {referrals}"
@@ -244,9 +310,16 @@ async def leaderboard(message: types.Message):
     # TOP 10 USERS
     cursor.execute(
         """
-        SELECT telegram_id, username, coins, points, referrals
+        SELECT telegram_id,
+               user_code,
+               username,
+               coins,
+               points,
+               referrals
         FROM users
-        ORDER BY coins DESC, points DESC, referrals DESC
+        ORDER BY coins DESC,
+                 points DESC,
+                 referrals DESC
         LIMIT 10
         """
     )
@@ -257,21 +330,32 @@ async def leaderboard(message: types.Message):
 
     for index, user in enumerate(top_users, start=1):
 
-        telegram_id, username, coins, points, referrals = user
+        (
+            telegram_id,
+            user_code,
+            username,
+            coins,
+            points,
+            referrals
+        ) = user
 
         text += (
-            f"{index}. @{username}\n"
-            f"🪙 MITH Coins: {coins}\n"
-            f"💰 MITH Points: {points}\n"
-            f"👥 Referrals: {referrals}\n\n"
+            f"{index}. "
+            f"{user_code} | "
+            f"@{username} | "
+            f"🪙 {coins} | "
+            f"💰 {points} | "
+            f"👥 {referrals}\n"
         )
 
-    # GET ALL USERS FOR RANKING
+    # GET USER RANK
     cursor.execute(
         """
         SELECT telegram_id
         FROM users
-        ORDER BY coins DESC, points DESC, referrals DESC
+        ORDER BY coins DESC,
+                 points DESC,
+                 referrals DESC
         """
     )
 
@@ -282,15 +366,20 @@ async def leaderboard(message: types.Message):
     for index, user in enumerate(all_users, start=1):
 
         if user[0] == user_id:
+
             user_rank = index
             break
 
-    # SHOW USER POSITION IF NOT IN TOP 10
+    # SHOW USER POSITION
     if user_rank and user_rank > 10:
 
         cursor.execute(
             """
-            SELECT username, coins, points, referrals
+            SELECT user_code,
+                   username,
+                   coins,
+                   points,
+                   referrals
             FROM users
             WHERE telegram_id=?
             """,
@@ -301,15 +390,22 @@ async def leaderboard(message: types.Message):
 
         if current_user:
 
-            username, coins, points, referrals = current_user
+            (
+                user_code,
+                username,
+                coins,
+                points,
+                referrals
+            ) = current_user
 
             text += (
-                f"━━━━━━━━━━━━━━\n"
-                f"📍 Your Position: #{user_rank}\n\n"
-                f"@{username}\n"
-                f"🪙 MITH Coins: {coins}\n"
-                f"💰 MITH Points: {points}\n"
-                f"👥 Referrals: {referrals}"
+                f"\n━━━━━━━━━━━━━━\n"
+                f"📍 Rank #{user_rank}\n"
+                f"{user_code} | "
+                f"@{username} | "
+                f"🪙 {coins} | "
+                f"💰 {points} | "
+                f"👥 {referrals}"
             )
 
     await message.answer(text)
@@ -321,11 +417,31 @@ async def referral(message: types.Message):
 
     user_id = message.from_user.id
 
+    cursor.execute(
+        "SELECT user_code FROM users WHERE telegram_id=?",
+        (user_id,)
+    )
+
+    result = cursor.fetchone()
+
+    if not result:
+
+        await message.answer(
+            "❌ Use /start first"
+        )
+
+        return
+
+    user_code = result[0]
+
     bot_info = await bot.get_me()
 
-    referral_link = f"https://t.me/{bot_info.username}?start={user_id}"
+    referral_link = (
+        f"https://t.me/{bot_info.username}?start={user_code}"
+    )
 
     await message.answer(
+        f"🆔 Your User ID: {user_code}\n\n"
         f"👥 Your Referral Link:\n\n"
         f"{referral_link}\n\n"
         f"🎁 Earn 500 MITH Points per referral!"
