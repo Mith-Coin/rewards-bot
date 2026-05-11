@@ -202,7 +202,7 @@ async def leaderboard(message: types.Message):
     # header
     text = (
         "🏆 MITH LEADERBOARD\n"
-        "Format: ID | Coins | Points | Referrals\n\n"
+        "ID | Coins | Points | Referrals\n\n"
     )
 
     cursor.execute("""
