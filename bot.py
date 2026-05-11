@@ -18,10 +18,10 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # DATABASE (Railway persistent volume)
-conn = sqlite3.connect("/data/mith.db")
+conn = sqlite3.connect("/data/mith.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# CREATE TABLE
+# CREATE USERS TABLE
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     telegram_id INTEGER PRIMARY KEY,
@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS users (
     points INTEGER DEFAULT 0,
     coins REAL DEFAULT 0,
     referrals INTEGER DEFAULT 0,
+    wallet TEXT,
     last_daily TEXT
 )
 """)
@@ -41,7 +42,7 @@ TELEGRAM_GROUP_URL = "https://t.me/mith_coin_official"
 TELEGRAM_COMMUNITY_URL = "https://t.me/mith_india"
 
 
-# START
+# START COMMAND
 @dp.message(Command("start"))
 async def start(message: types.Message):
 
@@ -56,7 +57,7 @@ async def start(message: types.Message):
 
     if not user:
 
-        # GENERATE USER CODE
+        # generate numeric user_code
         cursor.execute("SELECT MAX(CAST(user_code AS INTEGER)) FROM users")
         last = cursor.fetchone()[0]
 
@@ -67,9 +68,12 @@ async def start(message: types.Message):
             VALUES (?, ?, ?, ?)
         """, (user_id, user_code, username, 100))
 
-        # REFERRAL
+        # referral reward
         if referral_code:
-            cursor.execute("SELECT telegram_id FROM users WHERE user_code=?", (referral_code,))
+            cursor.execute(
+                "SELECT telegram_id FROM users WHERE user_code=?",
+                (referral_code,)
+            )
             ref = cursor.fetchone()
 
             if ref and ref[0] != user_id:
@@ -82,24 +86,21 @@ async def start(message: types.Message):
 
         conn.commit()
 
-    # KEYBOARD
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="📸 Instagram", url=INSTAGRAM_URL)],
-            [InlineKeyboardButton(text="💬 Telegram Group", url=TELEGRAM_GROUP_URL)],
-            [InlineKeyboardButton(text="🚀 Community", url=TELEGRAM_COMMUNITY_URL)]
-        ]
-    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📸 Instagram", url=INSTAGRAM_URL)],
+        [InlineKeyboardButton(text="💬 Telegram Group", url=TELEGRAM_GROUP_URL)],
+        [InlineKeyboardButton(text="🚀 Community", url=TELEGRAM_COMMUNITY_URL)]
+    ])
 
     await message.answer(
         "🎁 Welcome to MITH Rewards\n\n"
-        "You received 100 MITH Points\n\n"
+        "You received 100 MITH Points!\n\n"
         "Commands:\n"
         "/daily\n"
         "/convert\n"
         "/balance\n"
         "/leaderboard\n"
-        "/referral",
+        "/referral\n",
         reply_markup=keyboard
     )
 
@@ -111,28 +112,30 @@ async def convert(message: types.Message):
     user_id = message.from_user.id
 
     cursor.execute("SELECT points, coins FROM users WHERE telegram_id=?", (user_id,))
-    result = cursor.fetchone()
+    data = cursor.fetchone()
 
-    if not result:
+    if not data:
         return await message.answer("❌ Use /start first")
 
-    points, coins = result
+    points, coins = data
 
     if points < 100:
         return await message.answer("❌ Minimum 100 points required")
 
-    minted = points // 100
+    coins_added = points // 100
     remaining = points % 100
 
     cursor.execute("""
         UPDATE users
         SET points=?, coins=?
         WHERE telegram_id=?
-    """, (remaining, coins + minted, user_id))
+    """, (remaining, coins + coins_added, user_id))
 
     conn.commit()
 
-    await message.answer(f"🎉 Converted {minted * 100} points → {minted} MITH Coins")
+    await message.answer(
+        f"🎉 Converted {coins_added * 100} points → {coins_added} MITH Coins"
+    )
 
 
 # DAILY
@@ -142,27 +145,25 @@ async def daily(message: types.Message):
     user_id = message.from_user.id
 
     cursor.execute("SELECT last_daily FROM users WHERE telegram_id=?", (user_id,))
-    result = cursor.fetchone()
+    data = cursor.fetchone()
 
-    if result and result[0]:
-
-        last = datetime.fromisoformat(result[0])
-
+    if data and data[0]:
+        last = datetime.fromisoformat(data[0])
         if datetime.now() - last < timedelta(hours=24):
-            return await message.answer("⏳ Already claimed daily reward")
+            return await message.answer("⏳ Already claimed today")
 
     reward = random.randint(20, 50)
 
     cursor.execute("""
         UPDATE users
         SET points = points + ?,
-            last_daily=?
+            last_daily = ?
         WHERE telegram_id=?
     """, (reward, datetime.now().isoformat(), user_id))
 
     conn.commit()
 
-    await message.answer(f"🎉 +{reward} MITH Points")
+    await message.answer(f"🎁 You earned {reward} MITH Points")
 
 
 # BALANCE
@@ -177,29 +178,35 @@ async def balance(message: types.Message):
         WHERE telegram_id=?
     """, (user_id,))
 
-    user = cursor.fetchone()
+    data = cursor.fetchone()
 
-    if not user:
+    if not data:
         return await message.answer("❌ Use /start first")
 
-    user_code, points, coins, referrals = user
+    code, points, coins, refs = data
 
     await message.answer(
-        f"🆔 {user_code}\n"
+        f"🆔 ID: {code}\n"
         f"💰 Points: {points}\n"
         f"🪙 Coins: {coins}\n"
-        f"👥 Referrals: {referrals}"
+        f"👥 Referrals: {refs}"
     )
 
 
-# LEADERBOARD (CLEAN)
+# LEADERBOARD
 @dp.message(Command("leaderboard"))
 async def leaderboard(message: types.Message):
 
     user_id = message.from_user.id
 
+    # header
+    text = (
+        "🏆 MITH LEADERBOARD\n"
+        "Format: ID | Coins | Points | Referrals\n\n"
+    )
+
     cursor.execute("""
-        SELECT user_code, coins, points, referrals
+        SELECT user_code, username, coins, points, referrals
         FROM users
         ORDER BY coins DESC, points DESC, referrals DESC
         LIMIT 10
@@ -207,29 +214,26 @@ async def leaderboard(message: types.Message):
 
     top = cursor.fetchall()
 
-    text = "🏆 MITH Leaderboard\n\n"
-
     for i, u in enumerate(top, 1):
-        user_code, coins, points, refs = u
-        text += f"{i}. {user_code} | 🪙{coins} | 💰{points} | 👥{refs}\n"
+        code, username, coins, points, refs = u
+        text += f"{i}. {code} | 🪙{coins} | 💰{points} | 👥{refs}\n"
 
-    # RANK
+    # user rank
     cursor.execute("""
-        SELECT telegram_id FROM users
+        SELECT telegram_id, user_code, coins, points, referrals
+        FROM users
         ORDER BY coins DESC, points DESC, referrals DESC
     """)
 
     all_users = cursor.fetchall()
 
     rank = None
-
     for i, u in enumerate(all_users, 1):
         if u[0] == user_id:
             rank = i
             break
 
     if rank and rank > 10:
-
         cursor.execute("""
             SELECT user_code, coins, points, referrals
             FROM users
@@ -238,7 +242,9 @@ async def leaderboard(message: types.Message):
 
         me = cursor.fetchone()
 
-        text += f"\n━━━━━━━━━━\n📍 Your Rank #{rank}\n{me[0]} | 🪙{me[1]} | 💰{me[2]} | 👥{me[3]}"
+        if me:
+            code, coins, points, refs = me
+            text += f"\n📍 Your Rank #{rank}\n{code} | 🪙{coins} | 💰{points} | 👥{refs}"
 
     await message.answer(text)
 
@@ -250,23 +256,23 @@ async def referral(message: types.Message):
     user_id = message.from_user.id
 
     cursor.execute("SELECT user_code FROM users WHERE telegram_id=?", (user_id,))
-    code = cursor.fetchone()
+    data = cursor.fetchone()
 
-    if not code:
+    if not data:
         return await message.answer("❌ Use /start first")
 
-    bot_info = await bot.get_me()
+    code = data[0]
 
-    link = f"https://t.me/{bot_info.username}?start={code[0]}"
+    bot_info = await bot.get_me()
+    link = f"https://t.me/{bot_info.username}?start={code}"
 
     await message.answer(
-        f"🆔 {code[0]}\n\n"
         f"👥 Referral Link:\n{link}\n\n"
-        f"🎁 Earn 500 Points per referral"
+        f"🎁 Earn 500 points per referral!"
     )
 
 
-# RUN
+# MAIN
 async def main():
     print("MITH Bot Running...")
     await dp.start_polling(bot)
