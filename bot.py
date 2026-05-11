@@ -45,14 +45,16 @@ TELEGRAM_COMMUNITY_URL = "https://t.me/mith_india"
 
 
 # =========================
-# FSM STATE (TRANSFER FLOW)
+# FSM STATES
 # =========================
 class TransferState(StatesGroup):
     waiting_for_user_code = State()
     waiting_for_amount = State()
 
 
+# =========================
 # START
+# =========================
 @dp.message(Command("start"))
 async def start(message: types.Message):
 
@@ -257,14 +259,13 @@ async def referral(message: types.Message):
 
 
 # =========================
-# 🔥 TRANSFER FLOW (FSM)
+# 🔥 TRANSFER SYSTEM (FSM)
 # =========================
 
 @dp.message(Command("transfer"))
 async def transfer_start(message: types.Message, state: FSMContext):
 
     await state.set_state(TransferState.waiting_for_user_code)
-
     await message.answer("👤 Enter receiver USER CODE:")
 
 
@@ -273,14 +274,11 @@ async def get_user_code(message: types.Message, state: FSMContext):
 
     receiver_code = message.text.strip()
 
-    cursor.execute(
-        "SELECT telegram_id FROM users WHERE user_code=?",
-        (receiver_code,)
-    )
+    cursor.execute("SELECT telegram_id FROM users WHERE user_code=?", (receiver_code,))
     receiver = cursor.fetchone()
 
     if not receiver:
-        return await message.answer("❌ User not found. Enter valid USER CODE:")
+        return await message.answer("❌ Invalid user code. Try again:")
 
     await state.update_data(receiver_code=receiver_code)
 
@@ -322,13 +320,15 @@ async def execute_transfer(message: types.Message, state: FSMContext):
         await state.clear()
         return await message.answer("❌ Cannot transfer to yourself")
 
+    # 🔴 STRICT INSUFFICIENT BALANCE HANDLING
     if sender_balance < amount:
         await state.clear()
-        return await message.answer("❌ Insufficient balance")
+        return await message.answer(
+            "❌ Insufficient balance\n"
+            "🚫 Transfer cancelled"
+        )
 
-    cursor.execute("""
-        SELECT telegram_id FROM users WHERE user_code=?
-    """, (receiver_code,))
+    cursor.execute("SELECT telegram_id FROM users WHERE user_code=?", (receiver_code,))
     receiver = cursor.fetchone()
 
     if not receiver:
