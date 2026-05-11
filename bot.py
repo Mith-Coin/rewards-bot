@@ -2,6 +2,7 @@ import asyncio
 import sqlite3
 import random
 from datetime import datetime, timedelta
+from urllib.parse import quote
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -73,8 +74,8 @@ def start_button():
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🚀 Start",
-                    callback_data="start_menu"
+                    text="🏠 Start",
+                    callback_data="show_menu"
                 )
             ]
         ]
@@ -123,7 +124,7 @@ def main_menu(user_id):
         ]
     ]
 
-    # DAILY BUTTON HIDE
+    # DAILY BUTTON VISIBILITY
     cursor.execute(
         "SELECT last_daily FROM users WHERE telegram_id=?",
         (user_id,)
@@ -162,7 +163,7 @@ def main_menu(user_id):
     )
 
 # =========================
-# START COMMAND
+# START
 # =========================
 @dp.message(Command("start"))
 async def start(message: types.Message):
@@ -208,7 +209,7 @@ async def start(message: types.Message):
             100
         ))
 
-        # REFERRAL REWARD
+        # REFERRAL SYSTEM
         if referral_code:
 
             cursor.execute(
@@ -415,11 +416,38 @@ async def referral(message: types.Message, user_id=None):
         f"{bot_info.username}?start={code}"
     )
 
+    share_text = (
+        "🚀 Join MITH Rewards and earn FREE MITH Coins!\n\n"
+        f"{link}"
+    )
+
+    share_url = (
+        "https://t.me/share/url?"
+        f"url={quote(link)}"
+        f"&text={quote(share_text)}"
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🏠 Start",
+                    callback_data="show_menu"
+                ),
+
+                InlineKeyboardButton(
+                    text="📤 Share",
+                    url=share_url
+                )
+            ]
+        ]
+    )
+
     await message.answer(
         f"👥 Referral Link:\n\n"
         f"{link}\n\n"
         f"🎁 Earn 500 points per referral!",
-        reply_markup=start_button()
+        reply_markup=keyboard
     )
 
 # =========================
@@ -503,7 +531,7 @@ async def transfer_start(
     )
 
 # =========================
-# RECEIVE USER CODE
+# GET USER CODE
 # =========================
 @dp.message(TransferState.waiting_for_user_code)
 async def get_user_code(
@@ -551,7 +579,6 @@ async def execute_transfer(
     sender_id = message.from_user.id
 
     try:
-
         amount = float(
             message.text.strip()
         )
@@ -629,7 +656,7 @@ async def execute_transfer(
 
     receiver_id = receiver[0]
 
-    # TRANSFER
+    # EXECUTE TRANSFER
     cursor.execute("""
         UPDATE users
         SET coins = coins - ?
@@ -664,30 +691,34 @@ async def execute_transfer(
 # =========================
 @dp.message(Command("balance"))
 async def balance_command(message: types.Message):
-    await balance(message)
+    await balance(message, message.from_user.id)
 
 @dp.message(Command("daily"))
 async def daily_command(message: types.Message):
-    await daily(message)
+    await daily(message, message.from_user.id)
 
 @dp.message(Command("convert"))
 async def convert_command(message: types.Message):
-    await convert(message)
+    await convert(message, message.from_user.id)
 
 @dp.message(Command("leaderboard"))
 async def leaderboard_command(message: types.Message):
-    await leaderboard(message)
+    await leaderboard(message, message.from_user.id)
 
 @dp.message(Command("referral"))
 async def referral_command(message: types.Message):
-    await referral(message)
+    await referral(message, message.from_user.id)
 
 @dp.message(Command("transfer"))
 async def transfer_command(
     message: types.Message,
     state: FSMContext
 ):
-    await transfer_start(message, state)
+    await transfer_start(
+        message,
+        state,
+        message.from_user.id
+    )
 
 # =========================
 # CALLBACK ROUTER
@@ -703,10 +734,10 @@ async def callback_router(
 
     try:
 
-        if data == "start_menu":
+        if data == "show_menu":
 
             await callback.message.answer(
-                "👇 Select an option",
+                "🏠 Main Menu",
                 reply_markup=main_menu(user_id)
             )
 
