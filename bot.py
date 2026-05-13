@@ -41,7 +41,6 @@ CREATE TABLE IF NOT EXISTS users (
     telegram_id INTEGER PRIMARY KEY,
     user_code TEXT UNIQUE,
     username TEXT,
-    points INTEGER DEFAULT 0,
     coins REAL DEFAULT 0,
     referrals INTEGER DEFAULT 0,
     wallet TEXT,
@@ -136,11 +135,6 @@ def main_menu(user_id):
 
         [
             InlineKeyboardButton(
-                text="💱 Convert",
-                callback_data="convert"
-            ),
-
-            InlineKeyboardButton(
                 text="👥 Referral",
                 callback_data="referral"
             )
@@ -229,7 +223,7 @@ async def start(message: types.Message):
                 telegram_id,
                 user_code,
                 username,
-                points
+                coins
             )
             VALUES (?, ?, ?, ?)
         """, (
@@ -253,7 +247,7 @@ async def start(message: types.Message):
 
                 cursor.execute("""
                     UPDATE users
-                    SET points = points + 500,
+                    SET coins = coins + 300,
                         referrals = referrals + 1
                     WHERE telegram_id=?
                 """, (ref[0],))
@@ -277,7 +271,6 @@ async def balance(message: types.Message, user_id=None):
     cursor.execute("""
         SELECT
             user_code,
-            points,
             coins,
             referrals
         FROM users
@@ -293,66 +286,12 @@ async def balance(message: types.Message, user_id=None):
             reply_markup=start_button()
         )
 
-    code, points, coins, refs = data
+    code, coins, refs = data
 
     await message.answer(
         f"🆔 ID: {code}\n"
-        f"💰 Points: {points}\n"
-        f"🪙 Coins: {coins}\n"
+        f"🪙 MITH Coins: {coins}\n"
         f"👥 Referrals: {refs}",
-        reply_markup=start_button()
-    )
-
-# =========================
-# CONVERT
-# =========================
-async def convert(message: types.Message, user_id=None):
-
-    if not user_id:
-        user_id = message.from_user.id
-
-    cursor.execute(
-        "SELECT points, coins FROM users WHERE telegram_id=?",
-        (user_id,)
-    )
-
-    data = cursor.fetchone()
-
-    if not data:
-
-        return await message.answer(
-            "❌ Use /start first",
-            reply_markup=start_button()
-        )
-
-    points, coins = data
-
-    if points < 100:
-
-        return await message.answer(
-            "❌ Minimum 100 points required",
-            reply_markup=start_button()
-        )
-
-    coins_added = points // 100
-    remaining = points % 100
-
-    cursor.execute("""
-        UPDATE users
-        SET points=?, coins=?
-        WHERE telegram_id=?
-    """, (
-        remaining,
-        coins + coins_added,
-        user_id
-    ))
-
-    conn.commit()
-
-    await message.answer(
-        f"🎉 Converted "
-        f"{coins_added * 100} points → "
-        f"{coins_added} MITH Coins",
         reply_markup=start_button()
     )
 
@@ -395,11 +334,11 @@ async def daily(message: types.Message, user_id=None):
                 reply_markup=start_button()
             )
 
-    reward = random.randint(20, 50)
+    reward = random.randint(50, 100)
 
     cursor.execute("""
         UPDATE users
-        SET points = points + ?,
+        SET coins = coins + ?,
             last_daily = ?
         WHERE telegram_id=?
     """, (
@@ -411,7 +350,7 @@ async def daily(message: types.Message, user_id=None):
     conn.commit()
 
     await message.answer(
-        f"🎁 You earned {reward} MITH Points",
+        f"🎁 You earned {reward} MITH Coins",
         reply_markup=start_button()
     )
 
@@ -476,7 +415,7 @@ async def referral(message: types.Message, user_id=None):
     await message.answer(
         f"👥 Referral Link:\n\n"
         f"{link}\n\n"
-        f"🎁 Earn 500 points per referral!",
+        f"🎁 Earn 300 MITH Coins per referral!",
         reply_markup=keyboard
     )
 
@@ -493,14 +432,10 @@ async def leaderboard(message: types.Message, user_id=None):
     cursor.execute("""
         SELECT
             user_code,
-            coins,
-            points,
-            referrals
+            coins
         FROM users
         ORDER BY
-            coins DESC,
-            points DESC,
-            referrals DESC
+            coins DESC
         LIMIT 10
     """)
 
@@ -508,13 +443,11 @@ async def leaderboard(message: types.Message, user_id=None):
 
     for i, u in enumerate(top, 1):
 
-        code, coins, points, refs = u
+        code, coins = u
 
         text += (
             f"{i}. {code} | "
-            f"🪙{coins} | "
-            f"💰{points} | "
-            f"👥{refs}\n"
+            f"🪙 {coins}\n"
         )
 
     await message.answer(
@@ -732,10 +665,6 @@ async def balance_command(message: types.Message):
 async def daily_command(message: types.Message):
     await daily(message, message.from_user.id)
 
-@dp.message(Command("convert"))
-async def convert_command(message: types.Message):
-    await convert(message, message.from_user.id)
-
 @dp.message(Command("leaderboard"))
 async def leaderboard_command(message: types.Message):
     await leaderboard(message, message.from_user.id)
@@ -795,13 +724,6 @@ async def callback_router(
         elif data == "daily":
 
             await daily(
-                callback.message,
-                user_id
-            )
-
-        elif data == "convert":
-
-            await convert(
                 callback.message,
                 user_id
             )
