@@ -1,8 +1,9 @@
 import asyncio
 import sqlite3
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -32,6 +33,11 @@ dp = Dispatcher(storage=storage)
 # =========================
 conn = sqlite3.connect("/data/mith.db", check_same_thread=False)
 cursor = conn.cursor()
+
+# =========================
+# IST TIMEZONE
+# =========================
+IST = ZoneInfo("Asia/Kolkata")
 
 # =========================
 # USERS TABLE
@@ -97,6 +103,52 @@ def cancel_button():
     )
 
 # =========================
+# CHECK DAILY ELIGIBILITY
+# =========================
+def can_claim_daily(last_daily):
+
+    if not last_daily:
+        return True
+
+    try:
+
+        last_claim = datetime.fromisoformat(last_daily).astimezone(IST)
+
+        now = datetime.now(IST)
+
+        return now.date() > last_claim.date()
+
+    except:
+        return True
+
+# =========================
+# TIME LEFT FOR NEXT RESET
+# =========================
+def time_until_midnight_ist():
+
+    now = datetime.now(IST)
+
+    tomorrow = now.date() + timedelta(days=1)
+
+    midnight = datetime.combine(
+        tomorrow,
+        time.min,
+        tzinfo=IST
+    )
+
+    remaining = midnight - now
+
+    hours = int(
+        remaining.total_seconds() // 3600
+    )
+
+    minutes = int(
+        (remaining.total_seconds() % 3600) // 60
+    )
+
+    return hours, minutes
+
+# =========================
 # MAIN MENU
 # =========================
 def main_menu(user_id):
@@ -160,15 +212,8 @@ def main_menu(user_id):
 
     if data and data[0]:
 
-        try:
-
-            last = datetime.fromisoformat(data[0])
-
-            if datetime.now() - last < timedelta(hours=24):
-                show_daily = False
-
-        except:
-            pass
+        if not can_claim_daily(data[0]):
+            show_daily = False
 
     if show_daily:
 
@@ -312,25 +357,13 @@ async def daily(message: types.Message, user_id=None):
 
     if data and data[0]:
 
-        last = datetime.fromisoformat(data[0])
+        if not can_claim_daily(data[0]):
 
-        remaining = timedelta(hours=24) - (
-            datetime.now() - last
-        )
-
-        if remaining.total_seconds() > 0:
-
-            hours = int(
-                remaining.total_seconds() // 3600
-            )
-
-            minutes = int(
-                (remaining.total_seconds() % 3600) // 60
-            )
+            hours, minutes = time_until_midnight_ist()
 
             return await message.answer(
-                f"⏳ Next reward in "
-                f"{hours}h {minutes}m",
+                f"⏳ Next reward at 12:00 AM IST\n"
+                f"Time remaining: {hours}h {minutes}m",
                 reply_markup=start_button()
             )
 
@@ -343,7 +376,7 @@ async def daily(message: types.Message, user_id=None):
         WHERE telegram_id=?
     """, (
         reward,
-        datetime.now().isoformat(),
+        datetime.now(IST).isoformat(),
         user_id
     ))
 
